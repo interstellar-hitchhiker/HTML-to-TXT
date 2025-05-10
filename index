@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Structured HTML Extractor with Ordered Sections and Files</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    #fileInput { margin-top: 1em; }
+    #infoBox { background: #f9f9f9; border: 1px solid #ccc; padding: 1em; margin-bottom: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Structured HTML Extractor (Fully Ordered)</h1>
+  
+  <div id="infoBox">
+    This tool extracts text from one or multiple HTML files, including entire folders with subdirectories. It preserves folder and file order, combines the content into a single structured text file, and names the file after the selected top-level folder.
+  </div>
+  
+  <input type="file" id="fileInput" webkitdirectory multiple>
+  <br><br>
+  <a id="downloadLink" style="display:none; margin-top:2em;">Download Compiled Text</a>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const downloadLink = document.getElementById('downloadLink');
+
+    fileInput.addEventListener('change', () => {
+      const files = Array.from(fileInput.files).filter(file => file.name.endsWith('.html'));
+      if (files.length === 0) {
+        alert("No HTML files found.");
+        return;
+      }
+
+      const rootFolder = files[0].webkitRelativePath.split('/')[0];
+      const folderStructure = {};
+      let processedCount = 0;
+
+      function naturalSort(a, b) {
+        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+      }
+
+      files.sort((a, b) => naturalSort(a.webkitRelativePath, b.webkitRelativePath));
+
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(reader.result, 'text/html');
+          doc.querySelectorAll('script, style').forEach(el => el.remove());
+
+          let text = doc.body.innerText.trim();
+
+          const pathParts = file.webkitRelativePath.split('/');
+          const folderPath = pathParts.slice(1, -1).join(' / ') || 'Root';
+          const fileName = pathParts[pathParts.length - 1];
+
+          if (!folderStructure[folderPath]) {
+            folderStructure[folderPath] = [];
+          }
+
+          folderStructure[folderPath].push({
+            fileName: fileName,
+            content: text
+          });
+
+          processedCount++;
+          if (processedCount === files.length) {
+            let combinedText = '';
+            const sortedFolders = Object.keys(folderStructure).sort(naturalSort);
+            for (const folder of sortedFolders) {
+              combinedText += `\n\n=== ${folder} ===\n\n`;
+              const sortedFiles = folderStructure[folder].sort((a, b) => naturalSort(a.fileName, b.fileName));
+              for (const fileData of sortedFiles) {
+                combinedText += `--- ${fileData.fileName} ---\n\n${fileData.content}\n\n`;
+              }
+            }
+            const blob = new Blob([combinedText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            downloadLink.href = url;
+            downloadLink.download = `${rootFolder}.txt`;
+            downloadLink.style.display = 'inline-block';
+            downloadLink.textContent = `Download Compiled Text as ${rootFolder}.txt`;
+          }
+        };
+        reader.readAsText(file);
+      });
+    });
+  </script>
+</body>
+</html>
